@@ -1,8 +1,8 @@
 use std::cmp::{max, min};
-use std::io::copy;
 use std::ops::{RangeFrom};
 use std::fmt;
 
+const INITIAL_NUM_BINS: i32 = 128;
 const GROW_LEFT_BY: i32 = 128;
 
 fn new_vec(size: usize) -> Vec<i64> {
@@ -21,7 +21,7 @@ pub struct Store {
 impl Store {
     pub fn new(max_num_bins: i32) -> Self {
         Store {
-            bins: new_vec(max_num_bins as usize),
+            bins: new_vec(INITIAL_NUM_BINS as usize),
             count: 0,
             min_key: 0,
             max_key: 0,
@@ -72,7 +72,7 @@ impl Store {
         if self.max_key - key >= self.max_num_bins as i32 {
             min_key = self.max_key - (self.max_num_bins as i32) + 1
         } else {
-            min_key = -self.min_key;
+            min_key = self.min_key;
 
             // XXX: remove this loop
             while min_key > key {
@@ -80,12 +80,9 @@ impl Store {
             }
         }
 
-
         let mut tmp_bins = new_vec((self.max_key - min_key + 1) as usize);
-        //let mut tmp_bins = Vec::with_capacity((self.max_key - min_key + 1) as usize);
-        //copy(tmp_bins[self.min_key - min_key..], self.bins);
         let tmp_slice = &mut tmp_bins[self.convert_range((self.min_key - min_key)..)];
-        tmp_slice.copy_from_slice(&self.bins[0..]);
+        tmp_slice.copy_from_slice(&self.bins);
         self.bins = tmp_bins;
         self.min_key = min_key;
     }
@@ -94,6 +91,7 @@ impl Store {
         if self.max_key > key {
             return
         }
+
         if key - self.max_key >= self.max_num_bins {
             self.bins = new_vec(self.max_num_bins as usize);
             self.max_key = key;
@@ -101,10 +99,12 @@ impl Store {
             self.bins[0] = self.count
         } else if key - self.min_key >= self.max_num_bins {
             let min_key = key - self.max_num_bins + 1;
+
             let mut n = 0;
-            for i in self.min_key..min(self.min_key, self.max_key + 1) {
+            for i in self.min_key..min(min_key, self.max_key + 1) {
                 n += self.bins[(i - self.min_key) as usize];
             }
+
             if self.length() < self.max_num_bins {
                 let mut tmp_bins = new_vec(self.max_num_bins as usize);
                 let tmp_slice = &mut tmp_bins;
@@ -112,16 +112,7 @@ impl Store {
                 self.bins = tmp_bins;
             } else {
                 self.bins.drain(0..((min_key - self.min_key) as usize));
-                /*
-                {
-                    println!("bins len: {}, min_key: {}, self.min_key: {}, mid: {}", self.bins.len(), min_key, self.min_key, min_key - self.min_key);
-                    println!("self.max_key: {}, copy from loc: {}", self.max_key, (self.max_key - min_key + 1));
-                    let (left, right) = self.bins.split_at_mut((min_key - self.min_key) as usize);
-                    left.copy_from_slice(&right[0..]);
-                }
-                */
-                for i in (self.max_key - min_key + 1)..self.max_num_bins {
-                    //self.bins[i as usize] = 0
+                for _i in (self.max_key - min_key + 1)..self.max_num_bins {
                     self.bins.push(0);
                 }
             }
@@ -129,8 +120,9 @@ impl Store {
             self.min_key = min_key;
             self.bins[0] += n;
         } else {
-            let mut tmp_bins = new_vec((key - self.min_key + 1) as usize);
-            let tmp_slice = &mut tmp_bins;
+            let new_sz = (key - self.min_key + 1) as usize;
+            let mut tmp_bins = new_vec(new_sz);
+            let tmp_slice = &mut tmp_bins[0..self.bins.len()];
             tmp_slice.copy_from_slice(&self.bins);
             self.bins = tmp_bins;
             self.max_key = key;
@@ -145,11 +137,13 @@ impl Store {
 
 impl fmt::Debug for Store {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Store {{ bins: ")?;
+        write!(f, "Store {{ bins: [ ")?;
         for i in 0..self.bins.len() {
-            write!(f, "{}: {}, ", (i as i32) + self.min_key, self.bins[i])?;
+            if self.bins[i] > 0 {
+                write!(f, "[{}] {}: {}, ", i, (i as i32) + self.min_key, self.bins[i])?;
+            }
         }
-        writeln!(f, "count: {}, min_key: {}, max_key: {} }}", self.count, self.min_key, self.max_key)
+        writeln!(f, "] count: {}, min_key: {}, max_key: {} }}", self.count, self.min_key, self.max_key)
     }
 }
 
@@ -163,9 +157,17 @@ mod tests {
         let mut s = Store::new(2048);
 
         for i in 0..2048 {
-            println!("Adding: {}", i);
             s.add(i);
         }
-        println!("Store: {:?}", s);
+    }
+
+    #[test]
+    fn test_simple_store_rev()
+    {
+        let mut s = Store::new(2048);
+
+        for i in 20248..0 {
+            s.add(i);
+        }
     }
 }

@@ -17,17 +17,21 @@ fn log_gamma(value: f64, gamma_ln: f64) -> f64
 }
 
 impl Config {
-    pub fn defaults() -> Self {
-        let gamma_ln = 2.0 * DEFAULT_ALPHA;
+    pub fn new(alpha: f64, max_num_bins: u32, min_value: f64) -> Self {
+        let gamma_ln = (2.0 * alpha) / (1.0 - alpha);
         let gamma_ln = gamma_ln.ln_1p();
 
         Config{
-            max_num_bins: DEFAULT_MAX_BINS,
-            gamma: 1.0 + 2.0 * DEFAULT_ALPHA,
+            max_num_bins: max_num_bins,
+            gamma: 1.0 + (2.0 * alpha) / (1.0 - alpha),
             gamma_ln,
-            min_value: DEFAULT_MIN_VALUE,
-            offset: 1 - (log_gamma(DEFAULT_MIN_VALUE, gamma_ln) as i32)
+            min_value: min_value,
+            offset: 1 - (log_gamma(min_value, gamma_ln) as i32)
         }
+    }
+
+    pub fn defaults() -> Self {
+        Self::new(DEFAULT_ALPHA, DEFAULT_MAX_BINS, DEFAULT_MIN_VALUE)
     }
 
     pub fn key(self: &Self, v: f64) -> i32 {
