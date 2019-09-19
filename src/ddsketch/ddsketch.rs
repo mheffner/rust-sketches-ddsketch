@@ -42,7 +42,7 @@ impl DDSketch {
         }
     }
 
-    pub fn add(self: &mut Self, v: f64) {
+    pub fn add(&mut self, v: f64) {
         let key = self.config.key(v);
 
         self.store.add(key);
@@ -56,7 +56,7 @@ impl DDSketch {
         self.sum += v;
     }
 
-    pub fn quantile(self: &Self, q: f64) -> Result<Option<f64>> {
+    pub fn quantile(&self, q: f64) -> Result<Option<f64>> {
         if q < 0.0 || q > 1.0 {
             return Err(QuantileError)
         }
@@ -98,7 +98,7 @@ impl DDSketch {
         Ok(Some(ret))
     }
 
-    pub fn min(self: &Self) -> Option<f64> {
+    pub fn min(&self) -> Option<f64> {
         if self.empty() {
             None
         } else {
@@ -106,7 +106,7 @@ impl DDSketch {
         }
     }
 
-    pub fn max(self: &Self) -> Option<f64> {
+    pub fn max(&self) -> Option<f64> {
         if self.empty() {
             None
         } else {
@@ -114,7 +114,7 @@ impl DDSketch {
         }
     }
 
-    pub fn sum(self: &Self) -> Option<f64> {
+    pub fn sum(&self) -> Option<f64> {
         if self.empty() {
             None
         } else {
@@ -122,11 +122,11 @@ impl DDSketch {
         }
     }
 
-    pub fn count(self: &Self) -> usize {
+    pub fn count(&self) -> usize {
         self.store.count() as usize
     }
 
-    fn empty(self: &Self) -> bool {
+    fn empty(&self) -> bool {
         self.count() == 0
     }
 }

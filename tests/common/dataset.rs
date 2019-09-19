@@ -28,17 +28,17 @@ impl Dataset {
         }
     }
 
-    pub fn add(self: &mut Self, value: f64) {
+    pub fn add(&mut self, value: f64) {
         self.values.push(value);
         self.sum += value;
         self.sorted = false;
     }
 
-    pub fn quantile(self: &mut Self, q: f64) -> f64 {
+    pub fn quantile(&mut self, q: f64) -> f64 {
         self.lower_quantile(q)
     }
 
-    pub fn lower_quantile(self: &mut Self, q: f64) -> f64 {
+    pub fn lower_quantile(&mut self, q: f64) -> f64 {
         if q < 0.0 || q > 1.0 || self.values.len() == 0 {
             return NAN;
         }
@@ -49,7 +49,7 @@ impl Dataset {
         self.values[rank.floor() as usize]
     }
 
-    pub fn upper_quantile(self: &mut Self, q: f64) -> f64 {
+    pub fn upper_quantile(&mut self, q: f64) -> f64 {
         if q < 0.0 || q > 1.0 || self.values.len() == 0 {
             return NAN;
         }
@@ -59,25 +59,25 @@ impl Dataset {
         self.values[rank.ceil() as usize]
     }
 
-    pub fn min(self: &mut Self) -> f64 {
+    pub fn min(&mut self) -> f64 {
         self.sort();
         self.values[0]
     }
 
-    pub fn max(self: &mut Self) -> f64 {
+    pub fn max(&mut self) -> f64 {
         self.sort();
         self.values[self.values.len() - 1]
     }
 
-    pub fn sum(self: &Self) -> f64 {
+    pub fn sum(&self) -> f64 {
         self.sum
     }
 
-    pub fn count(self: &Self) -> usize {
+    pub fn count(&self) -> usize {
         self.values.len()
     }
 
-    fn sort(self: &mut Self) {
+    fn sort(&mut self) {
         if self.sorted {
             return;
         }

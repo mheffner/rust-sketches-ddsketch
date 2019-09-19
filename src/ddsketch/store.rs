@@ -28,11 +28,11 @@ impl Store {
         }
     }
 
-    pub fn length(self: &Self) -> i32 {
+    pub fn length(&self) -> i32 {
         self.bins.len() as i32
     }
 
-    pub fn add(self: &mut Self, key: i32) {
+    pub fn add(&mut self, key: i32) {
         if self.count == 0 {
             self.max_key = key;
             self.min_key = key - (self.length() as i32) + 1;
@@ -49,7 +49,7 @@ impl Store {
         self.count += 1;
     }
 
-    pub fn key_at_rank(self: &Self, rank: u64) -> i32 {
+    pub fn key_at_rank(&self, rank: u64) -> i32 {
         let mut n = 0;
         for (i, bin) in self.bins.iter().enumerate() {
             n += *bin;
@@ -61,7 +61,7 @@ impl Store {
         self.max_key
     }
 
-    fn grow_left(self: &mut Self, key: i32) {
+    fn grow_left(&mut self, key: i32) {
         if self.min_key < key || self.length() >= self.max_num_bins {
             return
         }
@@ -85,7 +85,7 @@ impl Store {
         self.min_key = min_key;
     }
 
-    fn grow_right(self: &mut Self, key: i32) {
+    fn grow_right(&mut self, key: i32) {
         if self.max_key > key {
             return
         }
@@ -127,11 +127,11 @@ impl Store {
         }
     }
 
-    pub fn count(self: &Self) -> u64 {
+    pub fn count(&self) -> u64 {
         self.count
     }
 
-    fn convert_range(self: &Self, range: RangeFrom<i32>) -> RangeFrom<usize> {
+    fn convert_range(&self, range: RangeFrom<i32>) -> RangeFrom<usize> {
         assert!(range.start >= 0);
         RangeFrom { start: range.start as usize }
     }
