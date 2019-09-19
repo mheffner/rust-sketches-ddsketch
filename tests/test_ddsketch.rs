@@ -82,19 +82,19 @@ fn compare_sketches(d: &mut dataset::Dataset, g: &DDSketch) {
             max_expected = upper * (1.0 - TEST_ALPHA);
         }
 
-        let quantile = g.quantile(*q);
+        let quantile = g.quantile(*q).unwrap().unwrap();
 
         assert!(min_expected <= quantile, "Lower than min, quantile: {}, wanted {} <= {}", *q, min_expected, quantile);
         assert!(quantile <= max_expected, "Higher than max, quantile: {}, wanted {} <= {}", *q, quantile, max_expected);
 
         // verify that calls do not modify result (not mut so not possible?)
-        let quantile2 = g.quantile(*q);
+        let quantile2 = g.quantile(*q).unwrap().unwrap();
         assert_eq!(quantile, quantile2);
     }
 
-    assert_eq!(g.min(), d.min());
-    assert_eq!(g.max(), d.max());
-    assert_eq!(g.sum(), d.sum());
+    assert_eq!(g.min().unwrap(), d.min());
+    assert_eq!(g.max().unwrap(), d.max());
+    assert_eq!(g.sum().unwrap(), d.sum());
     assert_eq!(g.count(), d.count());
 }
 
@@ -115,7 +115,7 @@ fn test_performance() {
     for value in values {
         g.add(value);
     }
-    let quantile = g.quantile(0.50);
+    let quantile = g.quantile(0.50).unwrap().unwrap();
 
     let elapsed = start_time.elapsed().as_micros() as f64;
     let elapsed = elapsed / 1_000_000.0;
