@@ -131,6 +131,54 @@ impl Store {
         self.count
     }
 
+    pub fn merge(&mut self, o: &Store) {
+        if o.count == 0 {
+            return;
+        }
+
+        if self.count == 0 {
+            self.copy(o);
+            return;
+        }
+
+        if self.max_key > o.max_key {
+            if o.min_key < self.min_key {
+                self.grow_left(o.min_key)
+            }
+            for i in max(self.min_key, o.min_key)..(o.max_key + 1) {
+                self.bins[(i - self.min_key) as usize] += o.bins[(i - o.min_key) as usize];
+            }
+            let mut n = 0;
+            for i in o.min_key..self.min_key {
+                n += o.bins[(i - o.min_key) as usize];
+            }
+            self.bins[0] += n;
+        } else {
+            if o.min_key < self.min_key {
+                let mut tmp_bins = o.bins.clone();
+                for i in self.min_key..(self.max_key + 1) {
+                    tmp_bins[(i - o.min_key) as usize] += self.bins[(i - self.min_key) as usize];
+                }
+                self.bins = tmp_bins;
+                self.max_key = o.max_key;
+                self.min_key = o.min_key
+            } else {
+                self.grow_right(o.max_key);
+                for i in o.min_key..(o.max_key + 1) {
+                    self.bins[(i - self.min_key) as usize] += o.bins[(i - o.min_key) as usize];
+                }
+            }
+        }
+        self.count += o.count;
+    }
+
+    fn copy(&mut self, o: &Store) {
+        self.bins = o.bins.clone();
+        self.min_key = o.min_key;
+        self.max_key = o.max_key;
+        self.count = o.count;
+    }
+
     fn convert_range(&self, range: RangeFrom<i32>) -> RangeFrom<usize> {
         assert!(range.start >= 0);
         RangeFrom { start: range.start as usize }

@@ -6,10 +6,14 @@ use common::dataset;
 use common::generator;
 use common::generator::Generator;
 use std::time::Instant;
+use crate::common::dataset::Dataset;
 
 const TEST_ALPHA: f64 = 0.01;
 const TEST_MAX_BINS: u32 = 1024;
 const TEST_MIN_VALUE: f64 = 1.0e-9;
+
+// Used for float equality
+const TEST_ERROR_THRESH: f64 = 1.0e-10;
 
 const TEST_SIZES: [usize; 5] = [3, 5, 10, 100, 1000];
 const TEST_QUANTILES: [f64; 10] = [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 0.999, 1.0];
@@ -39,16 +43,29 @@ fn test_exponential() {
     evaluate_sketches(|| Box::new(generator::Exponential::new(2.0)));
 }
 
-fn evaluate_sketches(gen_factory: impl Fn() -> Box<dyn generator::Generator>) {
+fn evaluate_test_sizes(f: impl Fn(usize)) {
     for sz in &TEST_SIZES {
-        let mut generator = gen_factory();
-        evaluate_sketch(*sz, &mut generator);
+        f(*sz);
     }
+}
 
+fn evaluate_sketches(gen_factory: impl Fn() -> Box<dyn generator::Generator>) {
+    evaluate_test_sizes(|sz: usize| {
+        let mut generator = gen_factory();
+        evaluate_sketch(sz, &mut generator);
+    });
+}
+
+fn new_config() -> Config {
+    Config::new(TEST_ALPHA, TEST_MAX_BINS, TEST_MIN_VALUE)
+}
+
+fn assert_float_eq(a: f64, b: f64) {
+    assert!((a - b).abs() < TEST_ERROR_THRESH, "{} != {}", a, b);
 }
 
 fn evaluate_sketch(count: usize, generator: &mut Box<dyn generator::Generator>) {
-    let c = Config::new(TEST_ALPHA, TEST_MAX_BINS, TEST_MIN_VALUE);
+    let c = new_config();
     let mut g = DDSketch::new(c);
 
     let mut d = dataset::Dataset::new();
@@ -94,8 +111,130 @@ fn compare_sketches(d: &mut dataset::Dataset, g: &DDSketch) {
 
     assert_eq!(g.min().unwrap(), d.min());
     assert_eq!(g.max().unwrap(), d.max());
-    assert_eq!(g.sum().unwrap(), d.sum());
+    assert_float_eq(g.sum().unwrap(), d.sum());
     assert_eq!(g.count(), d.count());
+}
+
+#[test]
+fn test_merge_normal() {
+    evaluate_test_sizes(|sz: usize| {
+        let c = new_config();
+        let mut d = Dataset::new();
+        let mut g1 = DDSketch::new(c);
+
+        let mut generator1 = generator::Normal::new(35.0, 1.0);
+        for _ in (0..sz).step_by(3) {
+            let value = generator1.generate();
+            g1.add(value);
+            d.add(value);
+        }
+        let mut g2 = DDSketch::new(c);
+        let mut generator2 = generator::Normal::new(50.0, 2.0);
+        for _ in (1..sz).step_by(3) {
+            let value = generator2.generate();
+            g2.add(value);
+            d.add(value);
+        }
+        g1.merge(&g2).unwrap();
+
+        let mut g3 = DDSketch::new(c);
+        let mut generator3 = generator::Normal::new(40.0, 0.5);
+        for _ in (2..sz).step_by(3) {
+            let value = generator3.generate();
+            g3.add(value);
+            d.add(value);
+        }
+        g1.merge(&g3).unwrap();
+
+        compare_sketches(&mut d, &g1);
+    });
+}
+
+#[test]
+fn test_merge_empty() {
+    evaluate_test_sizes(|sz: usize| {
+        let c = new_config();
+
+        let mut d = Dataset::new();
+
+        let mut g1 = DDSketch::new(c);
+        let mut g2 = DDSketch::new(c);
+        let mut generator = generator::Exponential::new(5.0);
+
+        for _ in 0..sz {
+            let value = generator.generate();
+            g2.add(value);
+            d.add(value);
+        }
+        g1.merge(&g2).unwrap();
+        compare_sketches(&mut d, &g1);
+
+        let g3 = DDSketch::new(c);
+        g2.merge(&g3).unwrap();
+        compare_sketches(&mut d, &g2);
+    });
+}
+
+#[test]
+fn test_merge_mixed() {
+    evaluate_test_sizes(|sz: usize| {
+        let c = new_config();
+        let mut d = Dataset::new();
+        let mut g1 = DDSketch::new(c);
+
+        let mut generator1 = generator::Normal::new(100.0, 1.0);
+        for _ in (0..sz).step_by(3) {
+            let value = generator1.generate();
+            g1.add(value);
+            d.add(value);
+        }
+
+        let mut g2 = DDSketch::new(c);
+        let mut generator2 = generator::Exponential::new(5.0);
+        for _ in (1..sz).step_by(3) {
+            let value = generator2.generate();
+            g2.add(value);
+            d.add(value);
+        }
+        g1.merge(&g2).unwrap();
+
+        let mut g3 = DDSketch::new(c);
+        let mut generator3 = generator::Exponential::new(0.1);
+        for _ in (2..sz).step_by(3) {
+            let value = generator3.generate();
+            g3.add(value);
+            d.add(value);
+        }
+        g1.merge(&g3).unwrap();
+
+        compare_sketches(&mut d, &g1);
+    })
+}
+
+#[test]
+fn test_merge_incompatible() {
+    let c1 = Config::new(TEST_ALPHA, TEST_MAX_BINS, TEST_MIN_VALUE);
+    let c2 = Config::new(TEST_ALPHA * 2.0, TEST_MAX_BINS, TEST_MIN_VALUE);
+
+    let mut d1 = DDSketch::new(c1);
+    let d2 = DDSketch::new(c2);
+
+    assert!(d1.merge(&d2).is_err());
+
+    let c3 = Config::new(TEST_ALPHA, TEST_MAX_BINS, TEST_MIN_VALUE * 10.0);
+    let d3 = DDSketch::new(c3);
+
+    assert!(d1.merge(&d3).is_err());
+
+    let c4 = Config::new(TEST_ALPHA, TEST_MAX_BINS * 2, TEST_MIN_VALUE);
+    let d4 = DDSketch::new(c4);
+
+    assert!(d1.merge(&d4).is_err());
+
+    // the same should work
+    let c5 = Config::new(TEST_ALPHA, TEST_MAX_BINS, TEST_MIN_VALUE);
+    let dsame = DDSketch::new(c5);
+    assert!(d1.merge(&dsame).is_ok());
 }
 
 #[test]

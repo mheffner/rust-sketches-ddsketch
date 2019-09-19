@@ -2,7 +2,7 @@ const DEFAULT_MAX_BINS: u32 = 2048;
 const DEFAULT_ALPHA: f64 = 0.01;
 const DEFAULT_MIN_VALUE: f64 = 1.0e-9;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Config {
     pub max_num_bins: u32,
     pub gamma: f64,

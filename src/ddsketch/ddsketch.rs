@@ -5,17 +5,22 @@ use std::f64::INFINITY;
 use super::config::Config;
 use super::store::Store;
 
-type Result<T> = std::result::Result<T, QuantileError>;
+type Result<T> = std::result::Result<T, DDSketchError>;
 
 #[derive(Debug, Clone)]
-pub struct QuantileError;
-
-impl fmt::Display for QuantileError {
+pub enum DDSketchError {
+    Quantile,
+    Merge
+}
+impl fmt::Display for DDSketchError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid quantile, must be between 0 and 1 inclusive")
+        match self {
+            DDSketchError::Quantile => write!(f, "Invalid quantile, must be between 0 and 1 (inclusive)"),
+            DDSketchError::Merge => write!(f, "Can not merge sketches with different configs")
+        }
     }
 }
-impl error::Error for QuantileError {
+impl error::Error for DDSketchError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         // Generic
         None
@@ -58,7 +63,7 @@ impl DDSketch {
 
     pub fn quantile(&self, q: f64) -> Result<Option<f64>> {
         if q < 0.0 || q > 1.0 {
-            return Err(QuantileError)
+            return Err(DDSketchError::Quantile)
         }
 
         if self.empty() {
@@ -124,6 +129,34 @@ impl DDSketch {
 
     pub fn count(&self) -> usize {
         self.store.count() as usize
+    }
+
+    pub fn merge(&mut self, o: &DDSketch) -> Result<()> {
+        if self.config != o.config {
+            return Err(DDSketchError::Merge)
+        }
+
+        let was_empty = self.store.count() == 0;
+
+        // Merge the stores
+        self.store.merge(&o.store);
+
+        // Need to ensure we don't override min/max with initializers
+        // if either store were empty
+        if was_empty {
+            self.min = o.min;
+            self.max = o.max;
+        } else if o.store.count() > 0 {
+            if o.min < self.min {
+                self.min = o.min
+            }
+            if o.max > self.max {
+                self.max = o.max;
+            }
+        }
+        self.sum += o.sum;
+
+        Ok(())
     }
 
     fn empty(&self) -> bool {
