@@ -239,7 +239,7 @@ fn test_merge_incompatible() {
 
 #[test]
 #[ignore]
-fn test_performance() {
+fn test_performance_insert() {
     let c = Config::defaults();
     let mut g = DDSketch::new(c);
     let mut gen = generator::Normal::new(1000.0, 500.0);
@@ -264,3 +264,35 @@ fn test_performance() {
     println!("RESULT: p50={:.2} => Added {}M samples in {:2} secs ({:.2}M samples/sec)", quantile,
              count / 1_000_000, elapsed, (count as f64) / 1_000_000.0 / elapsed);
 }
+
+#[test]
+#[ignore]
+fn test_performance_merge() {
+    let c = Config::defaults();
+    let mut gen = generator::Normal::new(1000.0, 500.0);
+    let merge_count = 500_000;
+    let sample_count = 1_000;
+    let mut sketches = Vec::new();
+
+    for _ in 0..merge_count {
+        let mut d = DDSketch::new(c);
+        for _ in 0..sample_count {
+            d.add(gen.generate());
+        }
+        sketches.push(d);
+    }
+
+    let mut base = DDSketch::new(c);
+
+    let start_time = Instant::now();
+    for sketch in &sketches {
+        base.merge(sketch).unwrap();
+    }
+
+    let elapsed = start_time.elapsed().as_micros() as f64;
+    let elapsed = elapsed / 1_000_000.0;
+
+    println!("RESULT: Merged {} sketches in {:2} secs ({:.2} merges/sec)", merge_count, elapsed,
+             (merge_count as f64) / elapsed);
+}
+

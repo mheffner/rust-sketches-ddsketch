@@ -8,4 +8,4 @@ test_logs:
 	cargo test -- --nocapture
 
 test_performance:
-	cargo test --release test_performance -- --ignored --nocapture
+	cargo test --release --jobs 1 test_performance -- --ignored --nocapture

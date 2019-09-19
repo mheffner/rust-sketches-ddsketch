@@ -131,6 +131,10 @@ impl DDSketch {
         self.store.count() as usize
     }
 
+    pub fn length(&self) -> usize {
+        self.store.length() as usize
+    }
+
     pub fn merge(&mut self, o: &DDSketch) -> Result<()> {
         if self.config != o.config {
             return Err(DDSketchError::Merge)
