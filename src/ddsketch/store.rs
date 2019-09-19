@@ -166,7 +166,7 @@ mod tests {
     {
         let mut s = Store::new(2048);
 
-        for i in 20248..0 {
+        for i in 2048..0 {
             s.add(i);
         }
     }
