@@ -98,8 +98,8 @@ fn compare_sketches(d: &mut dataset::Dataset, g: &DDSketch) {
     assert_eq!(g.count(), d.count());
 }
 
-// Uncomment to run, preferably only in release mode
-//#[test]
+#[test]
+#[ignore]
 fn test_performance() {
     let c = Config::defaults();
     let mut g = DDSketch::new(c);
@@ -115,11 +115,13 @@ fn test_performance() {
     for value in values {
         g.add(value);
     }
+
+    // This simply ensures the operations don't get optimzed out as ignored
     let quantile = g.quantile(0.50).unwrap().unwrap();
 
     let elapsed = start_time.elapsed().as_micros() as f64;
     let elapsed = elapsed / 1_000_000.0;
 
-    println!("p50={:.2} => Added {}M samples in {:2} secs ({:.2}M samples/sec)", quantile,
+    println!("RESULT: p50={:.2} => Added {}M samples in {:2} secs ({:.2}M samples/sec)", quantile,
              count / 1_000_000, elapsed, (count as f64) / 1_000_000.0 / elapsed);
 }
