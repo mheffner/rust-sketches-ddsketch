@@ -27,7 +27,6 @@ pub struct DDSketch {
     store: Store,
     min: f64,
     max: f64,
-    count: u64, // usize?
     sum: f64
 }
 
@@ -39,7 +38,6 @@ impl DDSketch {
             store: Store::new(config.max_num_bins as i32),
             min: INFINITY,
             max: -INFINITY,
-            count: 0,
             sum: 0.0
         }
     }
@@ -55,7 +53,6 @@ impl DDSketch {
         if self.max < v {
             self.max = v;
         }
-        self.count += 1;
         self.sum += v;
     }
 
@@ -74,7 +71,7 @@ impl DDSketch {
             return Ok(Some(self.max));
         }
 
-        let rank = (q * ((self.count - 1) as f64) + 1.0) as i32;
+        let rank = (q * ((self.count() - 1) as f64) + 1.0) as u64;
         let mut key = self.store.key_at_rank(rank);
 
         let quantile;
@@ -126,11 +123,11 @@ impl DDSketch {
     }
 
     pub fn count(self: &Self) -> usize {
-        self.count as usize
+        self.store.count() as usize
     }
 
     fn empty(self: &Self) -> bool {
-        self.count == 0
+        self.count() == 0
     }
 }
 

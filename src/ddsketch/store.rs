@@ -5,14 +5,13 @@ use std::fmt;
 const INITIAL_NUM_BINS: i32 = 128;
 const GROW_LEFT_BY: i32 = 128;
 
-fn new_vec(size: usize) -> Vec<i64> {
+fn new_vec(size: usize) -> Vec<u64> {
     vec![0; size]
 }
 
-// TODO: cleanup int types here
 pub struct Store {
-    bins: Vec<i64>,
-    count: i64,
+    bins: Vec<u64>,
+    count: u64,
     min_key: i32,
     max_key: i32,
     max_num_bins: i32
@@ -50,11 +49,10 @@ impl Store {
         self.count += 1;
     }
 
-    pub fn key_at_rank(self: &Self, rank: i32) -> i32 {
-        let mut n = 0i32;
+    pub fn key_at_rank(self: &Self, rank: u64) -> i32 {
+        let mut n = 0;
         for (i, bin) in self.bins.iter().enumerate() {
-            // XXX: overflow?
-            n += *bin as i32;
+            n += *bin;
             if n >= rank {
                 return i as i32 + self.min_key;
             }
@@ -127,6 +125,10 @@ impl Store {
             self.bins = tmp_bins;
             self.max_key = key;
         }
+    }
+
+    pub fn count(self: &Self) -> u64 {
+        self.count
     }
 
     fn convert_range(self: &Self, range: RangeFrom<i32>) -> RangeFrom<usize> {
