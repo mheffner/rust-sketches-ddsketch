@@ -1,1 +1,58 @@
+/*!
+This crate provides a direct port of the [Golang](https://github.com/DataDog/sketches-go)
+[DDSketch](https://arxiv.org/pdf/1908.10693.pdf) implementation to Rust. All efforts
+have been made to keep this as close to the original implementation as possible, with a few tweaks to
+get closer to idiomatic Rust.
+
+# Usage
+
+Add multiple samples to a DDSketch and invoke the `quantile` method to pull any quantile from
+*0.0* to *1.0*.
+
+```rust
+extern crate sketches_ddsketch;
+
+use sketches_ddsketch::{Config, DDSketch};
+
+let c = Config::defaults();
+let mut d = DDSketch::new(c);
+
+d.add(1.0);
+d.add(1.0);
+d.add(1.0);
+
+let q = d.quantile(0.50).unwrap();
+
+assert_eq!(q, Some(1.0));
+```
+
+Sketches can also be merged.
+
+```rust
+extern crate sketches_ddsketch;
+
+use sketches_ddsketch::{Config, DDSketch};
+
+let c = Config::defaults();
+let mut d1 = DDSketch::new(c);
+let mut d2 = DDSketch::new(c);
+
+d1.add(1.0);
+d2.add(2.0);
+d2.add(2.0);
+
+d1.merge(&d2);
+
+assert_eq!(d1.count(), 3);
+```
+
+ */
+
+pub mod config;
 pub mod ddsketch;
+
+pub use config::Config;
+pub use ddsketch::DDSketch;
+
+mod store;
+

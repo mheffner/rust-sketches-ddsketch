@@ -199,7 +199,7 @@ impl fmt::Debug for Store {
 
 #[cfg(test)]
 mod tests {
-    use crate::ddsketch::store::Store;
+    use crate::store::Store;
 
     #[test]
     fn test_simple_store()

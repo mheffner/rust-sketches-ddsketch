@@ -1,12 +1,12 @@
-use sketches_ddsketch::ddsketch::config::Config;
-use sketches_ddsketch::ddsketch::ddsketch::DDSketch;
-
 mod common;
-use common::dataset;
+use common::dataset::Dataset;
 use common::generator;
 use common::generator::Generator;
+
 use std::time::Instant;
-use crate::common::dataset::Dataset;
+
+use sketches_ddsketch::Config;
+use sketches_ddsketch::DDSketch;
 
 const TEST_ALPHA: f64 = 0.01;
 const TEST_MAX_BINS: u32 = 1024;
@@ -68,7 +68,7 @@ fn evaluate_sketch(count: usize, generator: &mut Box<dyn generator::Generator>) 
     let c = new_config();
     let mut g = DDSketch::new(c);
 
-    let mut d = dataset::Dataset::new();
+    let mut d = Dataset::new();
 
     for _i in 0..count {
         let value = generator.generate();
@@ -80,7 +80,7 @@ fn evaluate_sketch(count: usize, generator: &mut Box<dyn generator::Generator>) 
     compare_sketches(&mut d, &g);
 }
 
-fn compare_sketches(d: &mut dataset::Dataset, g: &DDSketch) {
+fn compare_sketches(d: &mut Dataset, g: &DDSketch) {
     for q in &TEST_QUANTILES {
         let lower = d.lower_quantile(*q);
         let upper = d.upper_quantile(*q);

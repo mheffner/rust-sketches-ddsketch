@@ -2,11 +2,14 @@ use std::error;
 use std::fmt;
 use std::f64::INFINITY;
 
-use super::config::Config;
-use super::store::Store;
+use crate::config::Config;
+use crate::store::Store;
 
 type Result<T> = std::result::Result<T, DDSketchError>;
 
+/// General error type for DDSketch, represents either an invalid quantile or an
+/// incompatible merge operation.
+///
 #[derive(Debug, Clone)]
 pub enum DDSketchError {
     Quantile,
@@ -27,6 +30,7 @@ impl error::Error for DDSketchError {
     }
 }
 
+/// This struct represents a [DDSketch](https://arxiv.org/pdf/1908.10693.pdf)
 pub struct DDSketch {
     config: Config,
     store: Store,
@@ -37,6 +41,7 @@ pub struct DDSketch {
 
 // XXX: functions should return Option<> in the case of empty
 impl DDSketch {
+    /// Construct a `DDSketch`. Requires a `Config` specifying the parameters of the sketch
     pub fn new(config: Config) -> Self {
         DDSketch {
             config: config,
@@ -47,6 +52,7 @@ impl DDSketch {
         }
     }
 
+    /// Add the sample to the sketch
     pub fn add(&mut self, v: f64) {
         let key = self.config.key(v);
 
@@ -61,6 +67,10 @@ impl DDSketch {
         self.sum += v;
     }
 
+    /// Return the quantile value for quantiles between 0.0 and 1.0. Result is an error, represented
+    /// as DDSketchError::Quantile if the requested quantile is outside of that range.
+    ///
+    /// If the sketch is empty the result is None, else Some(v) for the quantile value.
     pub fn quantile(&self, q: f64) -> Result<Option<f64>> {
         if q < 0.0 || q > 1.0 {
             return Err(DDSketchError::Quantile)
@@ -103,6 +113,7 @@ impl DDSketch {
         Ok(Some(ret))
     }
 
+    /// Returns the minimum value seen, or None if sketch is empty
     pub fn min(&self) -> Option<f64> {
         if self.empty() {
             None
@@ -111,6 +122,7 @@ impl DDSketch {
         }
     }
 
+    /// Returns the maximum value seen, or None if sketch is empty
     pub fn max(&self) -> Option<f64> {
         if self.empty() {
             None
@@ -119,6 +131,7 @@ impl DDSketch {
         }
     }
 
+    /// Returns the sum of values seen, or None if sketch is empty
     pub fn sum(&self) -> Option<f64> {
         if self.empty() {
             None
@@ -127,14 +140,19 @@ impl DDSketch {
         }
     }
 
+    /// Returns the number of values added to the sketch
     pub fn count(&self) -> usize {
         self.store.count() as usize
     }
 
+    /// Returns the length of the underlying `Store`. This is mainly only useful for understanding
+    /// how much the sketch has grown given the inserted values.
     pub fn length(&self) -> usize {
         self.store.length() as usize
     }
 
+    /// Merge the contents of another sketch into this one. The sketch that is merged into this one
+    /// is unchanged after the merge.
     pub fn merge(&mut self, o: &DDSketch) -> Result<()> {
         if self.config != o.config {
             return Err(DDSketchError::Merge)
@@ -170,8 +188,8 @@ impl DDSketch {
 
 #[cfg(test)]
 mod tests {
-    use crate::ddsketch::config::Config;
-    use crate::ddsketch::ddsketch::DDSketch;
+    use crate::Config;
+    use crate::DDSketch;
 
     #[test]
     fn test_simple_quantile() {
