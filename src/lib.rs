@@ -10,8 +10,6 @@ Add multiple samples to a DDSketch and invoke the `quantile` method to pull any 
 *0.0* to *1.0*.
 
 ```rust
-extern crate sketches_ddsketch;
-
 use sketches_ddsketch::{Config, DDSketch};
 
 let c = Config::defaults();
@@ -29,8 +27,6 @@ assert_eq!(q, Some(1.0));
 Sketches can also be merged.
 
 ```rust
-extern crate sketches_ddsketch;
-
 use sketches_ddsketch::{Config, DDSketch};
 
 let c = Config::defaults();
@@ -48,11 +44,10 @@ assert_eq!(d1.count(), 3);
 
  */
 
-pub mod config;
-pub mod ddsketch;
+pub use self::config::Config;
+pub use self::ddsketch::{DDSketch, DDSketchError};
 
-pub use config::Config;
-pub use ddsketch::DDSketch;
-
+mod config;
 mod store;
+mod ddsketch;
 
