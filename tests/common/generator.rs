@@ -11,11 +11,11 @@ pub trait Generator {
 // Constant generator
 //
 pub struct Constant {
-    value: f64
+    value: f64,
 }
 impl Constant {
     pub fn new(value: f64) -> Self {
-        Constant{value}
+        Constant { value }
     }
 }
 impl Generator for Constant {
@@ -29,11 +29,14 @@ impl Generator for Constant {
 //
 pub struct Linear {
     current_value: f64,
-    step: f64
+    step: f64,
 }
 impl Linear {
     pub fn new(start_value: f64, step: f64) -> Self {
-        Linear{current_value: start_value, step}
+        Linear {
+            current_value: start_value,
+            step,
+        }
     }
 }
 impl Generator for Linear {
@@ -48,11 +51,13 @@ impl Generator for Linear {
 // Normal distribution generator
 //
 pub struct Normal {
-    distr: rand_distr::Normal<f64>
+    distr: rand_distr::Normal<f64>,
 }
 impl Normal {
     pub fn new(mean: f64, stddev: f64) -> Self {
-        Normal{distr: rand_distr::Normal::new(mean, stddev).unwrap()}
+        Normal {
+            distr: rand_distr::Normal::new(mean, stddev).unwrap(),
+        }
     }
 }
 impl Generator for Normal {
@@ -65,11 +70,13 @@ impl Generator for Normal {
 // Lognormal distribution generator
 //
 pub struct Lognormal {
-    distr: rand_distr::LogNormal<f64>
+    distr: rand_distr::LogNormal<f64>,
 }
 impl Lognormal {
     pub fn new(mean: f64, stddev: f64) -> Self {
-        Lognormal{distr: rand_distr::LogNormal::new(mean, stddev).unwrap()}
+        Lognormal {
+            distr: rand_distr::LogNormal::new(mean, stddev).unwrap(),
+        }
     }
 }
 impl Generator for Lognormal {
@@ -82,11 +89,13 @@ impl Generator for Lognormal {
 // Exponential distribution generator
 //
 pub struct Exponential {
-    distr: rand_distr::Exp<f64>
+    distr: rand_distr::Exp<f64>,
 }
 impl Exponential {
     pub fn new(lambda: f64) -> Self {
-        Exponential{distr: rand_distr::Exp::new(lambda).unwrap()}
+        Exponential {
+            distr: rand_distr::Exp::new(lambda).unwrap(),
+        }
     }
 }
 impl Generator for Exponential {

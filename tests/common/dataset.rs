@@ -1,10 +1,10 @@
-use std::f64::NAN;
 use std::cmp::Ordering;
+use std::f64::NAN;
 
 pub struct Dataset {
     values: Vec<f64>,
     sum: f64,
-    sorted: bool
+    sorted: bool,
 }
 
 fn cmp_f64(a: &f64, b: &f64) -> Ordering {
@@ -24,7 +24,7 @@ impl Dataset {
         Dataset {
             values: Vec::new(),
             sum: 0.0,
-            sorted: false
+            sorted: false,
         }
     }
 

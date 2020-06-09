@@ -9,11 +9,10 @@ pub struct Config {
     pub gamma: f64,
     gamma_ln: f64,
     min_value: f64,
-    pub offset: i32
+    pub offset: i32,
 }
 
-fn log_gamma(value: f64, gamma_ln: f64) -> f64
-{
+fn log_gamma(value: f64, gamma_ln: f64) -> f64 {
     value.ln() / gamma_ln
 }
 
@@ -26,12 +25,12 @@ impl Config {
         let gamma_ln = (2.0 * alpha) / (1.0 - alpha);
         let gamma_ln = gamma_ln.ln_1p();
 
-        Config{
-            max_num_bins: max_num_bins,
+        Config {
+            max_num_bins,
             gamma: 1.0 + (2.0 * alpha) / (1.0 - alpha),
             gamma_ln,
-            min_value: min_value,
-            offset: 1 - (log_gamma(min_value, gamma_ln) as i32)
+            min_value,
+            offset: 1 - (log_gamma(min_value, gamma_ln) as i32),
         }
     }
 
