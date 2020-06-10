@@ -48,6 +48,5 @@ pub use self::config::Config;
 pub use self::ddsketch::{DDSketch, DDSketchError};
 
 mod config;
-mod store;
 mod ddsketch;
-
+mod store;

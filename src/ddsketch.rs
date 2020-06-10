@@ -1,6 +1,6 @@
 use std::error;
-use std::fmt;
 use std::f64::INFINITY;
+use std::fmt;
 
 use crate::config::Config;
 use crate::store::Store;
@@ -13,13 +13,15 @@ type Result<T> = std::result::Result<T, DDSketchError>;
 #[derive(Debug, Clone)]
 pub enum DDSketchError {
     Quantile,
-    Merge
+    Merge,
 }
 impl fmt::Display for DDSketchError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DDSketchError::Quantile => write!(f, "Invalid quantile, must be between 0 and 1 (inclusive)"),
-            DDSketchError::Merge => write!(f, "Can not merge sketches with different configs")
+            DDSketchError::Quantile => {
+                write!(f, "Invalid quantile, must be between 0 and 1 (inclusive)")
+            }
+            DDSketchError::Merge => write!(f, "Can not merge sketches with different configs"),
         }
     }
 }
@@ -31,12 +33,13 @@ impl error::Error for DDSketchError {
 }
 
 /// This struct represents a [DDSketch](https://arxiv.org/pdf/1908.10693.pdf)
+#[derive(Clone)]
 pub struct DDSketch {
     config: Config,
     store: Store,
     min: f64,
     max: f64,
-    sum: f64
+    sum: f64,
 }
 
 // XXX: functions should return Option<> in the case of empty
@@ -48,7 +51,7 @@ impl DDSketch {
             store: Store::new(config.max_num_bins as i32),
             min: INFINITY,
             max: -INFINITY,
-            sum: 0.0
+            sum: 0.0,
         }
     }
 
@@ -73,11 +76,11 @@ impl DDSketch {
     /// If the sketch is empty the result is None, else Some(v) for the quantile value.
     pub fn quantile(&self, q: f64) -> Result<Option<f64>> {
         if q < 0.0 || q > 1.0 {
-            return Err(DDSketchError::Quantile)
+            return Err(DDSketchError::Quantile);
         }
 
         if self.empty() {
-            return Ok(None)
+            return Ok(None);
         }
 
         if q == 0.0 {
@@ -155,7 +158,7 @@ impl DDSketch {
     /// is unchanged after the merge.
     pub fn merge(&mut self, o: &DDSketch) -> Result<()> {
         if self.config != o.config {
-            return Err(DDSketchError::Merge)
+            return Err(DDSketchError::Merge);
         }
 
         let was_empty = self.store.count() == 0;
@@ -220,5 +223,56 @@ mod tests {
         assert!(dd.quantile(1.01).is_err());
     }
 
+    #[test]
+    fn test_basic_histogram_data() {
+        let values = &[
+            0.754225035,
+            0.752900282,
+            0.752812246,
+            0.752602367,
+            0.754310155,
+            0.753525981,
+            0.752981082,
+            0.752715536,
+            0.751667941,
+            0.755079054,
+            0.753528150,
+            0.755188464,
+            0.752508723,
+            0.750064549,
+            0.753960428,
+            0.751139298,
+            0.752523560,
+            0.753253428,
+            0.753498342,
+            0.751858358,
+            0.752104636,
+            0.753841300,
+            0.754467374,
+            0.753814334,
+            0.750881719,
+            0.753182556,
+            0.752576884,
+            0.753945708,
+            0.753571911,
+            0.752314573,
+            0.752586651,
+        ];
 
+        let c = Config::defaults();
+        let mut dd = DDSketch::new(c);
+
+        for value in values {
+            dd.add(*value);
+        }
+
+        assert_eq!(dd.max(), Some(0.755188464));
+        assert_eq!(dd.min(), Some(0.750064549));
+        assert_eq!(dd.count(), 31);
+        assert_eq!(dd.sum(), Some(23.343630625000003));
+
+        assert!(dd.quantile(0.25).unwrap().is_some());
+        assert!(dd.quantile(0.5).unwrap().is_some());
+        assert!(dd.quantile(0.75).unwrap().is_some());
+    }
 }

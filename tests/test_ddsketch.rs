@@ -101,8 +101,20 @@ fn compare_sketches(d: &mut Dataset, g: &DDSketch) {
 
         let quantile = g.quantile(*q).unwrap().unwrap();
 
-        assert!(min_expected <= quantile, "Lower than min, quantile: {}, wanted {} <= {}", *q, min_expected, quantile);
-        assert!(quantile <= max_expected, "Higher than max, quantile: {}, wanted {} <= {}", *q, quantile, max_expected);
+        assert!(
+            min_expected <= quantile,
+            "Lower than min, quantile: {}, wanted {} <= {}",
+            *q,
+            min_expected,
+            quantile
+        );
+        assert!(
+            quantile <= max_expected,
+            "Higher than max, quantile: {}, wanted {} <= {}",
+            *q,
+            quantile,
+            max_expected
+        );
 
         // verify that calls do not modify result (not mut so not possible?)
         let quantile2 = g.quantile(*q).unwrap().unwrap();
@@ -261,8 +273,13 @@ fn test_performance_insert() {
     let elapsed = start_time.elapsed().as_micros() as f64;
     let elapsed = elapsed / 1_000_000.0;
 
-    println!("RESULT: p50={:.2} => Added {}M samples in {:2} secs ({:.2}M samples/sec)", quantile,
-             count / 1_000_000, elapsed, (count as f64) / 1_000_000.0 / elapsed);
+    println!(
+        "RESULT: p50={:.2} => Added {}M samples in {:2} secs ({:.2}M samples/sec)",
+        quantile,
+        count / 1_000_000,
+        elapsed,
+        (count as f64) / 1_000_000.0 / elapsed
+    );
 }
 
 #[test]
@@ -292,7 +309,10 @@ fn test_performance_merge() {
     let elapsed = start_time.elapsed().as_micros() as f64;
     let elapsed = elapsed / 1_000_000.0;
 
-    println!("RESULT: Merged {} sketches in {:2} secs ({:.2} merges/sec)", merge_count, elapsed,
-             (merge_count as f64) / elapsed);
+    println!(
+        "RESULT: Merged {} sketches in {:2} secs ({:.2} merges/sec)",
+        merge_count,
+        elapsed,
+        (merge_count as f64) / elapsed
+    );
 }
-
