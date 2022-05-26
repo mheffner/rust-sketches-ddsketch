@@ -17,5 +17,6 @@ exclude = [".gitignore"]
 [dependencies]
 
 [dev-dependencies]
+approx = "0.5.1"
 rand = "0.7.2"
 rand_distr = "0.2.2"
