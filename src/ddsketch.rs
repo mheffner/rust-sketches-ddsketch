@@ -89,7 +89,7 @@ impl DDSketch {
             return Ok(Some(self.max));
         }
 
-        let rank = (q * ((self.count() - 1) as f64) + 1.0) as u64;
+        let rank = (q * self.count() as f64).ceil() as u64;
         let mut key = self.store.key_at_rank(rank);
 
         let quantile;
@@ -191,8 +191,39 @@ impl DDSketch {
 
 #[cfg(test)]
 mod tests {
+    use approx::assert_relative_eq;
+
     use crate::Config;
     use crate::DDSketch;
+
+    #[test]
+    fn test_quartiles() {
+        let alpha = 0.01;
+        let c = Config::new(alpha, 2048, 10e-9);
+        let mut dd = DDSketch::new(c);
+
+        // Initialize sketch with {1.0, 2.0, 3.0, 4.0}
+        for i in 1..5 {
+            dd.add(i as f64);
+        }
+
+        // We expect the following mappings from quantile to value:
+        // [0,0.25]: 1.0, (0.25,0.5]: 2.0, (0.5,0.75]: 3.0, (0.75, 1.0]: 4.0
+        let test_cases = vec![
+            (0.0, 1.0),
+            (0.25, 1.0),
+            (0.26, 2.0),
+            (0.5, 2.0),
+            (0.51, 3.0),
+            (0.75, 3.0),
+            (0.76, 4.0),
+            (1.0, 4.0),
+        ];
+
+        for (q, val) in test_cases {
+            assert_relative_eq!(dd.quantile(q).unwrap().unwrap(), val, max_relative = alpha);
+        }
+    }
 
     #[test]
     fn test_simple_quantile() {
