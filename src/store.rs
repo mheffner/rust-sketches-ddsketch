@@ -1,213 +1,209 @@
-use std::cmp::{max, min};
-use std::fmt;
-use std::ops::RangeFrom;
+const CHUNK_SIZE: i32 = 128;
 
-const INITIAL_NUM_BINS: i32 = 128;
-const GROW_LEFT_BY: i32 = 128;
-
-fn new_vec(size: usize) -> Vec<u64> {
-    vec![0; size]
+// Divide the `dividend` by the `divisor`, rounding towards positive infinity.
+//
+// Similar to the nightly only `std::i32::div_ceil`.
+fn div_ceil(dividend: i32, divisor: i32) -> i32 {
+    (dividend + divisor - 1) / divisor
 }
 
-#[derive(Clone)]
+/// CollapsingLowestDenseStore
+#[derive(Clone, Debug)]
 pub struct Store {
     bins: Vec<u64>,
     count: u64,
     min_key: i32,
     max_key: i32,
-    max_num_bins: i32,
+    offset: i32,
+    bin_limit: usize,
+    is_collapsed: bool,
 }
 
 impl Store {
-    pub fn new(max_num_bins: i32) -> Self {
+    pub fn new(bin_limit: usize) -> Self {
         Store {
-            bins: new_vec(INITIAL_NUM_BINS as usize),
+            bins: Vec::new(),
             count: 0,
-            min_key: 0,
-            max_key: 0,
-            max_num_bins,
+            min_key: i32::MAX,
+            max_key: i32::MIN,
+            offset: 0,
+            bin_limit,
+            is_collapsed: false,
         }
     }
 
+    /// Return the number of bins.
     pub fn length(&self) -> i32 {
         self.bins.len() as i32
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.bins.is_empty()
+    }
+
     pub fn add(&mut self, key: i32) {
-        if self.count == 0 {
-            self.max_key = key;
-            self.min_key = key - (self.length() as i32) + 1;
-        }
-        if key < self.min_key {
-            self.grow_left(key)
-        } else if key > self.max_key {
-            self.grow_right(key)
-        }
-
-        let idx = max(key - self.min_key, 0) as usize;
-
+        let idx = self.get_index(key);
         self.bins[idx] += 1;
         self.count += 1;
+    }
+
+    fn get_index(&mut self, key: i32) -> usize {
+        if key < self.min_key {
+            if self.is_collapsed {
+                return 0;
+            }
+
+            self.extend_range(key, None);
+            if self.is_collapsed {
+                return 0;
+            }
+        } else if key > self.max_key {
+            self.extend_range(key, None);
+        }
+
+        (key - self.offset) as usize
+    }
+
+    fn extend_range(&mut self, key: i32, second_key: Option<i32>) {
+        let second_key = second_key.unwrap_or(key);
+        let new_min_key = i32::min(key, i32::min(second_key, self.min_key));
+        let new_max_key = i32::max(key, i32::max(second_key, self.max_key));
+
+        if self.is_empty() {
+            let new_len = self.get_new_length(new_min_key, new_max_key);
+            self.bins.resize(new_len, 0);
+            self.offset = new_min_key;
+            self.adjust(new_min_key, new_max_key);
+        } else if new_min_key >= self.min_key && new_max_key < self.offset + self.length() {
+            self.min_key = new_min_key;
+            self.max_key = new_max_key;
+        } else {
+            // Grow bins
+            let new_length = self.get_new_length(new_min_key, new_max_key);
+            if new_length > self.length() as usize {
+                self.bins.resize(new_length, 0);
+            }
+            self.adjust(new_min_key, new_max_key);
+        }
+    }
+
+    fn get_new_length(&self, new_min_key: i32, new_max_key: i32) -> usize {
+        let desired_length = new_max_key - new_min_key + 1;
+        usize::min((CHUNK_SIZE * div_ceil(desired_length, CHUNK_SIZE)) as usize, self.bin_limit)
+    }
+
+    fn adjust(&mut self, new_min_key: i32, new_max_key: i32) {
+        if new_max_key - new_min_key + 1 > self.length() {
+            let new_min_key = new_max_key - self.length() + 1;
+
+            if new_min_key >= self.max_key {
+                // Put everything in the first bin.
+                self.offset = new_min_key;
+                self.min_key = new_min_key;
+                self.bins.fill(0);
+                self.bins[0] = self.count;
+            } else {
+                let shift = self.offset - new_min_key;
+                if shift < 0 {
+                    let collapse_start_index = (self.min_key - self.offset) as usize;
+                    let collapse_end_index = (new_min_key - self.offset) as usize;
+                    let collapsed_count: u64 = self.bins[collapse_start_index..collapse_end_index].iter().sum();
+                    let zero_len = (new_min_key - self.min_key) as usize;
+                    self.bins.splice(collapse_start_index..collapse_end_index,
+                                     std::iter::repeat(0).take(zero_len));
+                    self.bins[collapse_end_index] += collapsed_count;
+                }
+                self.min_key = new_min_key;
+                self.shift_bins(shift);
+            }
+
+            self.max_key = new_max_key;
+            self.is_collapsed = true;
+        } else {
+            self.center_bins(new_min_key, new_max_key);
+            self.min_key = new_min_key;
+            self.max_key = new_max_key;
+        }
+    }
+
+    fn shift_bins(&mut self, shift: i32) {
+        if shift > 0 {
+            let shift = shift as usize;
+            self.bins.rotate_right(shift);
+            for idx in 0..shift {
+                self.bins[idx] = 0;
+            }
+        } else {
+            let shift = shift.abs() as usize;
+            for idx in 0..shift {
+                self.bins[idx] = 0;
+            }
+            self.bins.rotate_left(shift);
+        }
+
+        self.offset -= shift;
+    }
+
+    fn center_bins(&mut self, new_min_key: i32, new_max_key: i32) {
+        let middle_key = new_min_key + (new_max_key - new_min_key + 1) / 2;
+        let shift = self.offset + self.length() / 2 - middle_key;
+        self.shift_bins(shift)
     }
 
     pub fn key_at_rank(&self, rank: u64) -> i32 {
         let mut n = 0;
         for (i, bin) in self.bins.iter().enumerate() {
             n += *bin;
-            if n >= rank {
-                return i as i32 + self.min_key;
+            if n > rank {
+                return i as i32 + self.offset;
             }
         }
 
         self.max_key
     }
 
-    fn grow_left(&mut self, key: i32) {
-        if self.min_key < key || self.length() >= self.max_num_bins {
-            return;
-        }
-
-        let mut min_key;
-        if self.max_key - key >= self.max_num_bins as i32 {
-            min_key = self.max_key - (self.max_num_bins as i32) + 1
-        } else {
-            min_key = self.min_key;
-
-            // XXX: remove this loop
-            while min_key > key {
-                min_key -= GROW_LEFT_BY;
-            }
-        }
-
-        let mut tmp_bins = new_vec((self.max_key - min_key + 1) as usize);
-        let tmp_slice = &mut tmp_bins[self.convert_range((self.min_key - min_key)..)];
-        tmp_slice.copy_from_slice(&self.bins);
-        self.bins = tmp_bins;
-        self.min_key = min_key;
-    }
-
-    fn grow_right(&mut self, key: i32) {
-        if self.max_key > key {
-            return;
-        }
-
-        if key - self.max_key >= self.max_num_bins {
-            self.bins = new_vec(self.max_num_bins as usize);
-            self.max_key = key;
-            self.min_key = key - self.max_num_bins + 1;
-            self.bins[0] = self.count
-        } else if key - self.min_key >= self.max_num_bins {
-            let min_key = key - self.max_num_bins + 1;
-
-            let mut n = 0;
-            for i in self.min_key..min(min_key, self.max_key + 1) {
-                n += self.bins[(i - self.min_key) as usize];
-            }
-
-            if self.length() < self.max_num_bins {
-                let mut tmp_bins = new_vec(self.max_num_bins as usize);
-                let src_slice = &self.bins[self.convert_range((min_key - self.min_key)..)];
-                let tmp_slice = &mut tmp_bins[..src_slice.len()];
-                tmp_slice.copy_from_slice(src_slice);
-                self.bins = tmp_bins;
-            } else {
-                self.bins.drain(0..((min_key - self.min_key) as usize));
-                for _i in (self.max_key - min_key + 1)..self.max_num_bins {
-                    self.bins.push(0);
-                }
-            }
-            self.max_key = key;
-            self.min_key = min_key;
-            self.bins[0] += n;
-        } else {
-            let new_sz = (key - self.min_key + 1) as usize;
-            let mut tmp_bins = new_vec(new_sz);
-            let tmp_slice = &mut tmp_bins[0..self.bins.len()];
-            tmp_slice.copy_from_slice(&self.bins);
-            self.bins = tmp_bins;
-            self.max_key = key;
-        }
-    }
-
     pub fn count(&self) -> u64 {
-        self.count
+        self.count as u64
     }
 
-    pub fn merge(&mut self, o: &Store) {
-        if o.count == 0 {
+    pub fn merge(&mut self, other: &Store) {
+        if other.count == 0 {
             return;
         }
 
         if self.count == 0 {
-            self.copy(o);
+            self.copy(other);
             return;
         }
 
-        if self.max_key > o.max_key {
-            if o.min_key < self.min_key {
-                self.grow_left(o.min_key)
-            }
-            for i in max(self.min_key, o.min_key)..(o.max_key + 1) {
-                self.bins[(i - self.min_key) as usize] += o.bins[(i - o.min_key) as usize];
-            }
-            let mut n = 0;
-            for i in o.min_key..self.min_key {
-                n += o.bins[(i - o.min_key) as usize];
-            }
-            self.bins[0] += n;
-        } else {
-            if o.min_key < self.min_key {
-                let mut tmp_bins = o.bins.clone();
-                for i in self.min_key..(self.max_key + 1) {
-                    tmp_bins[(i - o.min_key) as usize] += self.bins[(i - self.min_key) as usize];
-                }
-                self.bins = tmp_bins;
-                self.max_key = o.max_key;
-                self.min_key = o.min_key
-            } else {
-                self.grow_right(o.max_key);
-                for i in o.min_key..(o.max_key + 1) {
-                    self.bins[(i - self.min_key) as usize] += o.bins[(i - o.min_key) as usize];
-                }
-            }
+        if other.min_key < self.min_key || other.max_key > self.max_key {
+            self.extend_range(other.min_key, Some(other.max_key));
         }
-        self.count += o.count;
+
+        let collapse_start_index = other.min_key - other.offset;
+        let mut collapse_end_index = i32::min(self.min_key, other.max_key +1) - other.offset;
+        if collapse_end_index > collapse_start_index {
+            let collapsed_count: u64 = self.bins[collapse_start_index as usize..collapse_end_index as usize].iter().sum();
+            self.bins[0] += collapsed_count;
+        } else {
+            collapse_end_index = collapse_start_index;
+        }
+
+        for key in (collapse_end_index as i32 + other.offset)..(other.max_key + 1) {
+            self.bins[(key - self.offset) as usize] += other.bins[(key - other.offset) as usize]
+        }
+
+        self.count += other.count;
     }
 
     fn copy(&mut self, o: &Store) {
         self.bins = o.bins.clone();
+        self.count = o.count;
         self.min_key = o.min_key;
         self.max_key = o.max_key;
-        self.count = o.count;
-    }
-
-    fn convert_range(&self, range: RangeFrom<i32>) -> RangeFrom<usize> {
-        assert!(range.start >= 0);
-        RangeFrom {
-            start: range.start as usize,
-        }
-    }
-}
-
-impl fmt::Debug for Store {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Store {{ bins: [ ")?;
-        for i in 0..self.bins.len() {
-            if self.bins[i] > 0 {
-                write!(
-                    f,
-                    "[{}] {}: {}, ",
-                    i,
-                    (i as i32) + self.min_key,
-                    self.bins[i]
-                )?;
-            }
-        }
-        writeln!(
-            f,
-            "] count: {}, min_key: {}, max_key: {} }}",
-            self.count, self.min_key, self.max_key
-        )
+        self.offset = o.offset;
+        self.bin_limit = o.bin_limit;
+        self.is_collapsed = o.is_collapsed;
     }
 }
 

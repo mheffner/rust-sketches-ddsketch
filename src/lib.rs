@@ -21,7 +21,8 @@ d.add(1.0);
 
 let q = d.quantile(0.50).unwrap();
 
-assert_eq!(q, Some(1.0));
+assert!(q < Some(1.01));
+assert!(q > Some(0.99));
 ```
 
 Sketches can also be merged.
