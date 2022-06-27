@@ -39,21 +39,29 @@ impl Config {
         Self::new(DEFAULT_ALPHA, DEFAULT_MAX_BINS, DEFAULT_MIN_VALUE)
     }
 
-    pub fn key(self: &Self, v: f64) -> i32 {
-        if v < -self.min_value {
-            return -(self.log_gamma(-v).ceil() as i32) - self.offset;
-        } else if v > self.min_value {
-            return (self.log_gamma(v).ceil() as i32) + self.offset;
-        } else {
-            return 0;
-        }
+    pub fn key(&self, v: f64) -> i32 {
+        self.log_gamma(v).ceil() as i32
     }
 
-    pub fn log_gamma(self: &Self, value: f64) -> f64 {
+    pub fn value(&self, key: i32) -> f64 {
+        self.pow_gamma(key) * (2.0 / (1.0 + self.gamma))
+    }
+
+    pub fn log_gamma(&self, value: f64) -> f64 {
         log_gamma(value, self.gamma_ln)
     }
 
-    pub fn pow_gamma(self: &Self, k: i32) -> f64 {
-        ((k as f64) * self.gamma_ln).exp()
+    pub fn pow_gamma(&self, key: i32) -> f64 {
+        ((key as f64) * self.gamma_ln).exp()
+    }
+
+    pub fn min_possible(&self) -> f64 {
+        self.min_value
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::new(DEFAULT_ALPHA, DEFAULT_MAX_BINS, DEFAULT_MIN_VALUE)
     }
 }

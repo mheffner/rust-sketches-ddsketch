@@ -1,5 +1,4 @@
 use std::error;
-use std::f64::INFINITY;
 use std::fmt;
 
 use crate::config::Config;
@@ -37,9 +36,11 @@ impl error::Error for DDSketchError {
 pub struct DDSketch {
     config: Config,
     store: Store,
+    negative_store: Store,
     min: f64,
     max: f64,
     sum: f64,
+    zero_count: u64,
 }
 
 // XXX: functions should return Option<> in the case of empty
@@ -47,19 +48,27 @@ impl DDSketch {
     /// Construct a `DDSketch`. Requires a `Config` specifying the parameters of the sketch
     pub fn new(config: Config) -> Self {
         DDSketch {
-            config: config,
-            store: Store::new(config.max_num_bins as i32),
-            min: INFINITY,
-            max: -INFINITY,
+            config,
+            store: Store::new(config.max_num_bins as usize),
+            negative_store: Store::new(config.max_num_bins as usize),
+            min: f64::INFINITY,
+            max: f64::NEG_INFINITY,
             sum: 0.0,
+            zero_count: 0,
         }
     }
 
     /// Add the sample to the sketch
     pub fn add(&mut self, v: f64) {
-        let key = self.config.key(v);
-
-        self.store.add(key);
+        if v > self.config.min_possible() {
+            let key = self.config.key(v);
+            self.store.add(key);
+        } else if v < -self.config.min_possible() {
+            let key = self.config.key(-v);
+            self.negative_store.add(key);
+        } else {
+            self.zero_count += 1;
+        }
 
         if v < self.min {
             self.min = v;
@@ -89,31 +98,20 @@ impl DDSketch {
             return Ok(Some(self.max));
         }
 
-        let rank = (q * self.count() as f64).ceil() as u64;
-        let mut key = self.store.key_at_rank(rank);
-
+        let rank = (q * (self.count() as f64 - 1.0)) as u64;
         let quantile;
-        if key < 0 {
-            key += self.config.offset;
-            quantile = -2.0 * self.config.pow_gamma(-key) / (1.0 + self.config.gamma);
-        } else if key > 0 {
-            key -= self.config.offset;
-            quantile = 2.0 * self.config.pow_gamma(key) / (1.0 + self.config.gamma);
-        } else {
+        if rank < self.negative_store.count() {
+            let reversed_rank = self.negative_store.count() - rank - 1;
+            let key = self.negative_store.key_at_rank(reversed_rank);
+            quantile = -self.config.value(key);
+        } else if rank < self.zero_count + self.negative_store.count() {
             quantile = 0.0;
-        }
-
-        // Bound by the extremes
-        let ret;
-        if quantile < self.min {
-            ret = self.min;
-        } else if quantile > self.max {
-            ret = self.max;
         } else {
-            ret = quantile;
+            let key = self.store.key_at_rank(rank - self.zero_count - self.negative_store.count());
+            quantile = self.config.value(key);
         }
 
-        Ok(Some(ret))
+        Ok(Some(quantile))
     }
 
     /// Returns the minimum value seen, or None if sketch is empty
@@ -145,7 +143,7 @@ impl DDSketch {
 
     /// Returns the number of values added to the sketch
     pub fn count(&self) -> usize {
-        self.store.count() as usize
+        (self.store.count() + self.zero_count + self.negative_store.count()) as usize
     }
 
     /// Returns the length of the underlying `Store`. This is mainly only useful for understanding
@@ -165,6 +163,8 @@ impl DDSketch {
 
         // Merge the stores
         self.store.merge(&o.store);
+        self.negative_store.merge(&o.negative_store);
+        self.zero_count += o.zero_count;
 
         // Need to ensure we don't override min/max with initializers
         // if either store were empty
@@ -197,6 +197,14 @@ mod tests {
     use crate::DDSketch;
 
     #[test]
+    fn test_add_zero() {
+        let alpha = 0.01;
+        let c = Config::new(alpha, 2048, 10e-9);
+        let mut dd = DDSketch::new(c);
+        dd.add(0.0);
+    }
+
+    #[test]
     fn test_quartiles() {
         let alpha = 0.01;
         let c = Config::new(alpha, 2048, 10e-9);
@@ -208,16 +216,42 @@ mod tests {
         }
 
         // We expect the following mappings from quantile to value:
-        // [0,0.25]: 1.0, (0.25,0.5]: 2.0, (0.5,0.75]: 3.0, (0.75, 1.0]: 4.0
+        // [0,0.33]: 1.0, (0.34,0.66]: 2.0, (0.67,0.99]: 3.0, (0.99, 1.0]: 4.0
         let test_cases = vec![
             (0.0, 1.0),
             (0.25, 1.0),
-            (0.26, 2.0),
+            (0.33, 1.0),
+            (0.34, 2.0),
             (0.5, 2.0),
-            (0.51, 3.0),
+            (0.66, 2.0),
+            (0.67, 3.0),
             (0.75, 3.0),
-            (0.76, 4.0),
+            (0.99, 3.0),
             (1.0, 4.0),
+        ];
+
+        for (q, val) in test_cases {
+            assert_relative_eq!(dd.quantile(q).unwrap().unwrap(), val, max_relative = alpha);
+        }
+    }
+
+    #[test]
+    fn test_neg_quartiles() {
+        let alpha = 0.01;
+        let c = Config::new(alpha, 2048, 10e-9);
+        let mut dd = DDSketch::new(c);
+
+        // Initialize sketch with {1.0, 2.0, 3.0, 4.0}
+        for i in 1..5 {
+            dd.add(-i as f64);
+        }
+
+        let test_cases = vec![
+            (0.0, -4.0),
+            (0.25, -4.0),
+            (0.5, -3.0),
+            (0.75, -2.0),
+            (1.0, -1.0),
         ];
 
         for (q, val) in test_cases {
