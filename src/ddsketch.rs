@@ -1,5 +1,7 @@
 use std::error;
 use std::fmt;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::config::Config;
 use crate::store::Store;
@@ -14,6 +16,7 @@ pub enum DDSketchError {
     Quantile,
     Merge,
 }
+
 impl fmt::Display for DDSketchError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -24,6 +27,7 @@ impl fmt::Display for DDSketchError {
         }
     }
 }
+
 impl error::Error for DDSketchError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         // Generic
@@ -32,7 +36,7 @@ impl error::Error for DDSketchError {
 }
 
 /// This struct represents a [DDSketch](https://arxiv.org/pdf/1908.10693.pdf)
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DDSketch {
     config: Config,
     store: Store,
@@ -192,6 +196,7 @@ impl DDSketch {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
+    use serde_json::json;
 
     use crate::Config;
     use crate::DDSketch;
@@ -339,5 +344,17 @@ mod tests {
         assert!(dd.quantile(0.25).unwrap().is_some());
         assert!(dd.quantile(0.5).unwrap().is_some());
         assert!(dd.quantile(0.75).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_serialize() {
+        let config = Config::defaults();
+        let mut sketch = DDSketch::new(config);
+
+        sketch.add(1.0);
+        sketch.add(1.0);
+        sketch.add(1.0);
+
+        json!(sketch);
     }
 }

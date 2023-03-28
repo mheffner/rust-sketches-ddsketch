@@ -1,3 +1,6 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 const CHUNK_SIZE: i32 = 128;
 
 // Divide the `dividend` by the `divisor`, rounding towards positive infinity.
@@ -8,7 +11,7 @@ fn div_ceil(dividend: i32, divisor: i32) -> i32 {
 }
 
 /// CollapsingLowestDenseStore
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Store {
     bins: Vec<u64>,
     count: u64,
