@@ -1,3 +1,6 @@
+#[cfg(feature = "use_serde")]
+use serde::{Deserialize, Serialize};
+
 const CHUNK_SIZE: i32 = 128;
 
 // Divide the `dividend` by the `divisor`, rounding towards positive infinity.
@@ -9,6 +12,7 @@ fn div_ceil(dividend: i32, divisor: i32) -> i32 {
 
 /// CollapsingLowestDenseStore
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]
 pub struct Store {
     bins: Vec<u64>,
     count: u64,
@@ -89,7 +93,10 @@ impl Store {
 
     fn get_new_length(&self, new_min_key: i32, new_max_key: i32) -> usize {
         let desired_length = new_max_key - new_min_key + 1;
-        usize::min((CHUNK_SIZE * div_ceil(desired_length, CHUNK_SIZE)) as usize, self.bin_limit)
+        usize::min(
+            (CHUNK_SIZE * div_ceil(desired_length, CHUNK_SIZE)) as usize,
+            self.bin_limit,
+        )
     }
 
     fn adjust(&mut self, new_min_key: i32, new_max_key: i32) {
@@ -107,10 +114,14 @@ impl Store {
                 if shift < 0 {
                     let collapse_start_index = (self.min_key - self.offset) as usize;
                     let collapse_end_index = (new_min_key - self.offset) as usize;
-                    let collapsed_count: u64 = self.bins[collapse_start_index..collapse_end_index].iter().sum();
+                    let collapsed_count: u64 = self.bins[collapse_start_index..collapse_end_index]
+                        .iter()
+                        .sum();
                     let zero_len = (new_min_key - self.min_key) as usize;
-                    self.bins.splice(collapse_start_index..collapse_end_index,
-                                     std::iter::repeat(0).take(zero_len));
+                    self.bins.splice(
+                        collapse_start_index..collapse_end_index,
+                        std::iter::repeat(0).take(zero_len),
+                    );
                     self.bins[collapse_end_index] += collapsed_count;
                 }
                 self.min_key = new_min_key;
@@ -181,9 +192,12 @@ impl Store {
         }
 
         let collapse_start_index = other.min_key - other.offset;
-        let mut collapse_end_index = i32::min(self.min_key, other.max_key +1) - other.offset;
+        let mut collapse_end_index = i32::min(self.min_key, other.max_key + 1) - other.offset;
         if collapse_end_index > collapse_start_index {
-            let collapsed_count: u64 = self.bins[collapse_start_index as usize..collapse_end_index as usize].iter().sum();
+            let collapsed_count: u64 = self.bins
+                [collapse_start_index as usize..collapse_end_index as usize]
+                .iter()
+                .sum();
             self.bins[0] += collapsed_count;
         } else {
             collapse_end_index = collapse_start_index;
