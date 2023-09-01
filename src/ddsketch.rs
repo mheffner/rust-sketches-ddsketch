@@ -102,7 +102,7 @@ impl DDSketch {
             return Ok(Some(self.max));
         }
 
-        let rank = (q * (self.count() as f64 - 1.0)) as u64;
+        let rank = ((q * self.count() as f64).ceil() as u64).min(self.count() as u64) - 1;
         let quantile;
         if rank < self.negative_store.count() {
             let reversed_rank = self.negative_store.count() - rank - 1;
@@ -216,23 +216,20 @@ mod tests {
         let c = Config::new(alpha, 2048, 10e-9);
         let mut dd = DDSketch::new(c);
 
-        // Initialize sketch with {1.0, 2.0, 3.0, 4.0}
         for i in 1..5 {
             dd.add(i as f64);
         }
 
         // We expect the following mappings from quantile to value:
-        // [0,0.33]: 1.0, (0.34,0.66]: 2.0, (0.67,0.99]: 3.0, (0.99, 1.0]: 4.0
+        // [0,0.25]: 1.0, (0.25,0.5]: 2.0, (0.5,0.75]: 3.0, (0.75, 1.0]: 4.0
         let test_cases = vec![
             (0.0, 1.0),
             (0.25, 1.0),
-            (0.33, 1.0),
-            (0.34, 2.0),
+            (0.26, 2.0),
             (0.5, 2.0),
-            (0.66, 2.0),
-            (0.67, 3.0),
+            (0.51, 3.0),
             (0.75, 3.0),
-            (0.99, 3.0),
+            (0.76, 4.0),
             (1.0, 4.0),
         ];
 
@@ -240,14 +237,95 @@ mod tests {
             assert_relative_eq!(dd.quantile(q).unwrap().unwrap(), val, max_relative = alpha);
         }
     }
+    #[test]
+    fn test_negative_quartiles() {
+        let alpha = 0.01;
+        let c = Config::new(alpha, 2048, 10e-9);
+        let mut dd = DDSketch::new(c);
 
+        for i in 1..5 {
+            dd.add((i * -1) as f64);
+        }
+
+        // We expect the following mappings from quantile to value:
+        // [0,0.25]: -4.0, (0.25,0.5]: -3.0, (0.5,0.75]: -2.0, (0.75, 1.0]: -1.0
+        let test_cases = vec![
+            (0.0, -4.0),
+            (0.25, -4.0),
+            (0.26, -3.0),
+            (0.5, -3.0),
+            (0.51, -2.0),
+            (0.75, -2.0),
+            (0.76, -1.0),
+            (1.0, -1.0),
+        ];
+
+        for (q, val) in test_cases {
+            assert_relative_eq!(dd.quantile(q).unwrap().unwrap(), val, max_relative = alpha);
+        }
+    }
+    #[test]
+    fn test_negative_positive_quartiles() {
+        let alpha = 0.01;
+        let c = Config::new(alpha, 2048, 10e-9);
+        let mut dd = DDSketch::new(c);
+
+        for i in -2..=2 {
+            dd.add(i as f64);
+        }
+
+        // We expect the following mappings from quantile to value:
+        // [0,0.20]: -2.0, [0.20,0.40]: -1.0, (0.4,0.6]: 0, (0.5,0.75]: 1.0, (0.80, 1.0]: 2.0
+        let test_cases = vec![
+            (0.0, -2.0),
+            (0.20, -2.0),
+            (0.21, -1.0),
+            (0.4, -1.0),
+            (0.41, 0.0),
+            (0.60, 0.0),
+            (0.61, 1.0),
+            (0.80, 1.0),
+            (0.81, 2.0),
+            (1.0, 2.0),
+        ];
+
+        for (q, val) in test_cases {
+            assert_relative_eq!(dd.quantile(q).unwrap().unwrap(), val, max_relative = alpha);
+        }
+    }
+    #[test]
+    fn test_quartiles_large() {
+        let alpha = 0.01;
+        let c = Config::new(alpha, 2048, 10e-9);
+        let mut dd = DDSketch::new(c);
+
+        for i in 1..1001 {
+            dd.add(i as f64);
+        }
+
+        // We expect the following mappings from quantile to value:
+        // [0,0.25]: 1.0, (0.25,0.5]: 2.0, (0.5,0.75]: 3.0, (0.75, 1.0]: 4.0
+        let test_cases = vec![
+            (0.0, 1.0),
+            (0.25, 250.0),
+            (0.26, 260.0),
+            (0.5, 500.0),
+            (0.51, 510.0),
+            (0.75, 750.0),
+            (0.76, 760.0),
+            (1.0, 1000.0),
+        ];
+
+        for (q, val) in test_cases {
+            assert_relative_eq!(dd.quantile(q).unwrap().unwrap(), val, max_relative = alpha);
+        }
+    }
     #[test]
     fn test_neg_quartiles() {
         let alpha = 0.01;
         let c = Config::new(alpha, 2048, 10e-9);
         let mut dd = DDSketch::new(c);
 
-        // Initialize sketch with {1.0, 2.0, 3.0, 4.0}
         for i in 1..5 {
             dd.add(-i as f64);
         }
