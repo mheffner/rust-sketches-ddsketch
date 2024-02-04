@@ -47,6 +47,12 @@ pub struct DDSketch {
     zero_count: u64,
 }
 
+impl Default for DDSketch {
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
+
 // XXX: functions should return Option<> in the case of empty
 impl DDSketch {
     /// Construct a `DDSketch`. Requires a `Config` specifying the parameters of the sketch

@@ -174,7 +174,7 @@ impl Store {
     }
 
     pub fn count(&self) -> u64 {
-        self.count as u64
+        self.count
     }
 
     pub fn merge(&mut self, other: &Store) {
@@ -203,7 +203,7 @@ impl Store {
             collapse_end_index = collapse_start_index;
         }
 
-        for key in (collapse_end_index as i32 + other.offset)..(other.max_key + 1) {
+        for key in (collapse_end_index + other.offset)..(other.max_key + 1) {
             self.bins[(key - self.offset) as usize] += other.bins[(key - other.offset) as usize]
         }
 
