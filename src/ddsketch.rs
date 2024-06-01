@@ -161,7 +161,7 @@ impl DDSketch {
     /// Returns the length of the underlying `Store`. This is mainly only useful for understanding
     /// how much the sketch has grown given the inserted values.
     pub fn length(&self) -> usize {
-        self.store.length() as usize
+        self.store.length() as usize + self.negative_store.length() as usize
     }
 
     /// Merge the contents of another sketch into this one. The sketch that is merged into this one
@@ -351,5 +351,23 @@ mod tests {
         assert!(dd.quantile(0.25).unwrap().is_some());
         assert!(dd.quantile(0.5).unwrap().is_some());
         assert!(dd.quantile(0.75).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_length() {
+        let mut dd = DDSketch::default();
+        assert_eq!(dd.length(), 0);
+
+        dd.add(1.0);
+        assert_eq!(dd.length(), 128);
+        dd.add(2.0);
+        dd.add(3.0);
+        assert_eq!(dd.length(), 128);
+
+        dd.add(-1.0);
+        assert_eq!(dd.length(), 256);
+        dd.add(-2.0);
+        dd.add(-3.0);
+        assert_eq!(dd.length(), 256);
     }
 }
