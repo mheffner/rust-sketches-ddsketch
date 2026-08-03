@@ -45,12 +45,6 @@ impl Store {
         self.bins.is_empty()
     }
 
-    pub fn add(&mut self, key: i32) {
-        let idx = self.get_index(key);
-        self.bins[idx] += 1;
-        self.count += 1;
-    }
-
     /// See Java: https://github.com/DataDog/sketches-java/blob/master/src/main/java/com/datadoghq/sketch/ddsketch/store/DenseStore.java  (add(int index, double count) method)
     pub(crate) fn add_count(&mut self, key: i32, count: u64) {
         let idx = self.get_index(key);
@@ -127,7 +121,7 @@ impl Store {
                     let zero_len = (new_min_key - self.min_key) as usize;
                     self.bins.splice(
                         collapse_start_index..collapse_end_index,
-                        std::iter::repeat_n(0, zero_len),
+                        std::iter::repeat(0).take(zero_len),
                     );
                     self.bins[collapse_end_index] += collapsed_count;
                 }
@@ -237,7 +231,7 @@ mod tests {
         let mut s = Store::new(2048);
 
         for i in 0..2048 {
-            s.add(i);
+            s.add_count(i, 1);
         }
     }
 
@@ -246,7 +240,7 @@ mod tests {
         let mut s = Store::new(2048);
 
         for i in (0..2048).rev() {
-            s.add(i);
+            s.add_count(i, 1);
         }
     }
 }

@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::{error, fmt};
 
 #[cfg(feature = "use_serde")]
@@ -68,14 +69,31 @@ impl DDSketch {
 
     /// Add the sample to the sketch
     pub fn add(&mut self, v: f64) {
+        self.add_with_count(v, 1);
+    }
+
+    /// Add the sample to the sketch `count` times, as if `add(v)` had been
+    /// called `count` times, in constant time.
+    ///
+    /// Mirrors the `count` parameter of DataDog's other DDSketch
+    /// implementations (Java's `accept(value, count)`, Go's `AddWithCount`),
+    /// restricted to integer counts to match this crate's integer bin counts.
+    ///
+    /// Adding with a count of zero is a no-op: it records nothing and leaves
+    /// min/max/sum untouched.
+    pub fn add_with_count(&mut self, v: f64, count: u64) {
+        if count == 0 {
+            return;
+        }
+
         if v > self.config.min_possible() {
             let key = self.config.key(v);
-            self.store.add(key);
+            self.store.add_count(key, count);
         } else if v < -self.config.min_possible() {
             let key = self.config.key(-v);
-            self.negative_store.add(key);
+            self.negative_store.add_count(key, count);
         } else {
-            self.zero_count += 1;
+            self.zero_count += count;
         }
 
         if v < self.min {
@@ -84,7 +102,7 @@ impl DDSketch {
         if self.max < v {
             self.max = v;
         }
-        self.sum += v;
+        self.sum += v * (count as f64);
     }
 
     /// Return the quantile value for quantiles between 0.0 and 1.0. Result is an error, represented
@@ -106,7 +124,9 @@ impl DDSketch {
             return Ok(Some(self.max));
         }
 
-        let rank = (q * (self.count() as f64 - 1.0)) as u64;
+        // Rank math stays in u64: `count()` narrows to usize, which truncates
+        // on 32-bit targets once weighted adds push the total past 2^32.
+        let rank = (q * (self.total_count() as f64 - 1.0)) as u64;
         let quantile;
         if rank < self.negative_store.count() {
             let reversed_rank = self.negative_store.count() - rank - 1;
@@ -151,9 +171,15 @@ impl DDSketch {
         }
     }
 
-    /// Returns the number of values added to the sketch
+    /// Returns the number of values added to the sketch, saturating at
+    /// `usize::MAX` on targets where `usize` is narrower than the internal
+    /// 64-bit count.
     pub fn count(&self) -> usize {
-        (self.store.count() + self.zero_count + self.negative_store.count()) as usize
+        usize::try_from(self.total_count()).unwrap_or(usize::MAX)
+    }
+
+    fn total_count(&self) -> u64 {
+        self.store.count() + self.zero_count + self.negative_store.count()
     }
 
     /// Returns the length of the underlying `Store`. This is mainly only useful for understanding
@@ -226,6 +252,82 @@ mod tests {
         let c = Config::new(alpha, 2048, 10e-9);
         let mut dd = DDSketch::new(c);
         dd.add(0.0);
+    }
+
+    #[test]
+    fn test_add_with_count_equals_repeated_add() {
+        let c = Config::new(0.01, 2048, 10e-9);
+        let mut repeated = DDSketch::new(c);
+        let mut counted = DDSketch::new(c);
+
+        // Positive, negative, and zero paths, with mixed counts.
+        for (v, n) in [(4.2, 1_000u64), (-7.0, 250), (0.0, 33), (123.45, 1)] {
+            for _ in 0..n {
+                repeated.add(v);
+            }
+            counted.add_with_count(v, n);
+        }
+
+        assert_eq!(repeated.count(), counted.count());
+        assert_eq!(repeated.min(), counted.min());
+        assert_eq!(repeated.max(), counted.max());
+        // Not exactly equal: repeated `+= v` accumulates float rounding that
+        // the single `v * count` multiply avoids.
+        assert_relative_eq!(
+            repeated.sum().unwrap(),
+            counted.sum().unwrap(),
+            max_relative = 1e-9
+        );
+        for q in [0.0, 0.01, 0.25, 0.5, 0.75, 0.99, 1.0] {
+            assert_eq!(
+                repeated.quantile(q).unwrap(),
+                counted.quantile(q).unwrap(),
+                "quantile {q} diverged"
+            );
+        }
+    }
+
+    #[test]
+    fn test_add_with_count_through_store_collapse() {
+        // A tight bin limit plus a wide dynamic range forces the collapsing
+        // store to collapse mid-stream; weighted adds must ride through
+        // collapse identically to repeated adds (collapse depends only on the
+        // key sequence, never on bin counts).
+        let c = Config::new(0.01, 128, 10e-9);
+        let mut repeated = DDSketch::new(c);
+        let mut counted = DDSketch::new(c);
+
+        let mut v = 1.0e-6;
+        let mut n = 1u64;
+        while v < 1.0e12 {
+            for _ in 0..n {
+                repeated.add(v);
+            }
+            counted.add_with_count(v, n);
+            v *= 3.7;
+            n = (n * 7) % 1000 + 1;
+        }
+
+        assert_eq!(repeated.count(), counted.count());
+        for q in [0.01, 0.25, 0.5, 0.75, 0.99] {
+            assert_eq!(
+                repeated.quantile(q).unwrap(),
+                counted.quantile(q).unwrap(),
+                "quantile {q} diverged"
+            );
+        }
+    }
+
+    #[test]
+    fn test_add_with_count_zero_is_noop() {
+        let c = Config::new(0.01, 2048, 10e-9);
+        let mut dd = DDSketch::new(c);
+        dd.add_with_count(42.0, 0);
+
+        assert_eq!(dd.count(), 0);
+        assert_eq!(dd.min(), None);
+        assert_eq!(dd.max(), None);
+        assert_eq!(dd.quantile(0.5).unwrap(), None);
     }
 
     #[test]
