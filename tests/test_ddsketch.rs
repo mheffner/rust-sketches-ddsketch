@@ -279,6 +279,40 @@ fn test_merge_negative_values() {
 }
 
 #[test]
+fn test_merge_collapsed() {
+    // 0.0001 and 32768 bins span about 1:700, so 60.0 makes the stores
+    // collapse their lowest bins. Store::merge used to fold the other store's
+    // collapsed bins in from self.bins, so the bins stopped adding up to the
+    // count and every quantile came back as the max.
+    let c = Config::new(0.0001, 32_768, TEST_MIN_VALUE);
+    let first = [(60.0, 1), (0.3, 5)];
+    let busy = [(0.00002, 200), (0.002, 500), (0.05, 300)];
+
+    let mut merged = DDSketch::new(c);
+    let mut single = DDSketch::new(c);
+    for part in &[&first[..], &busy[..], &busy[..]] {
+        let mut sketch = DDSketch::new(c);
+        for &(value, n) in part.iter() {
+            for _ in 0..n {
+                sketch.add(value);
+                single.add(value);
+            }
+        }
+        merged.merge(&sketch).unwrap();
+    }
+
+    assert_eq!(merged.count(), single.count());
+    for q in &[0.5, 0.9, 0.99] {
+        assert_eq!(
+            merged.quantile(*q).unwrap(),
+            single.quantile(*q).unwrap(),
+            "quantile: {}",
+            q
+        );
+    }
+}
+
+#[test]
 fn test_merge_incompatible() {
     let c1 = Config::new(TEST_ALPHA, TEST_MAX_BINS, TEST_MIN_VALUE);
     let c2 = Config::new(TEST_ALPHA * 2.0, TEST_MAX_BINS, TEST_MIN_VALUE);
