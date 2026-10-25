@@ -195,7 +195,7 @@ impl Store {
         let collapse_start_index = other.min_key - other.offset;
         let mut collapse_end_index = i32::min(self.min_key, other.max_key + 1) - other.offset;
         if collapse_end_index > collapse_start_index {
-            let collapsed_count: u64 = self.bins
+            let collapsed_count: u64 = other.bins
                 [collapse_start_index as usize..collapse_end_index as usize]
                 .iter()
                 .sum();
